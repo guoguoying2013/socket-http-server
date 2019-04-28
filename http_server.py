@@ -1,6 +1,9 @@
 import socket
 import sys
 import traceback
+import os
+import mimetypes
+import base64
 
 def response_ok(body=b"This is a minimal response", mimetype=b"text/plain"):
     """
@@ -18,22 +21,31 @@ def response_ok(body=b"This is a minimal response", mimetype=b"text/plain"):
         <html><h1>Welcome:</h1></html>\r\n
         '''
     """
+    return b"\r\n".join([
+        b"HTTP/1.1 200 OK",
+        b"Content-Type: " + mimetype,
+        b"",
+        body])
 
-    # TODO: Implement response_ok
-    return b""
 
 def response_method_not_allowed():
     """Returns a 405 Method Not Allowed response"""
 
     # TODO: Implement response_method_not_allowed
-    return b""
+    return b"\r\n".join([
+        b"HTTP/1.1 405 Method Not Allowed",
+        b"",
+        b"You can't do that on this server! response_method_not_allowed"])
 
 
 def response_not_found():
     """Returns a 404 Not Found response"""
 
     # TODO: Implement response_not_found
-    return b""
+    return b"\r\n".join([
+        b"HTTP/1.1 404 Not Found response",
+        b"",
+        b"You can't do that on this server! response_not_found"])
 
 
 def parse_request(request):
@@ -43,9 +55,13 @@ def parse_request(request):
     This server only handles GET requests, so this method shall raise a
     NotImplementedError if the method of the request is not GET.
     """
+    print(f"parse_request func, request received is {request}")
+    method, path, version = request.split("\r\n")[0].split(" ")
+    print("parse_request: the path is {}".format(path))
 
-    # TODO: implement parse_request
-    return ""
+    if method != "GET":
+        raise NotImplementedError
+    return path
 
 def response_path(path):
     """
@@ -74,10 +90,6 @@ def response_path(path):
         response_path('/a_page_that_doesnt_exist.html') -> Raises a NameError
 
     """
-
-    # TODO: Raise a NameError if the requested content is not present
-    # under webroot.
-
     # TODO: Fill in the appropriate content and mime_type give the path.
     # See the assignment guidelines for help on "mapping mime-types", though
     # you might need to create a special case for handling make_time.py
@@ -85,9 +97,74 @@ def response_path(path):
     # If the path is "make_time.py", then you may OPTIONALLY return the
     # result of executing `make_time.py`. But you need only return the
     # CONTENTS of `make_time.py`.
-    
-    content = b"not implemented"
-    mime_type = b"not implemented"
+    try:
+        if 'webroot' not in os.getcwd():
+            current_path = os.getcwd()
+            current_path += '/webroot'
+            os.chdir(current_path)
+            print(f"response parse func, changed to webroot, print cwd:{current_path}")
+        current_path = os.getcwd()
+        new_path = current_path + path
+        print(f"this is new_path, current+path argument:{new_path}")
+        if not os.path.isdir(new_path):
+            print("The path is a file, path argument:{}".format(path))
+            f_name = path.split("/")
+            file_name = f_name[-1]
+            print(f"file name is {file_name}")
+            mim = mimetypes.guess_type(file_name)[0]
+            mime_type = mim.encode('utf-8')
+            print("This is the mime_type:{}".format(mime_type))
+            if mime_type == b"text/html":
+                content = b""
+                print("file name is {}".format(file_name))
+                with open(file_name, 'r') as reader:
+                    for line in reader.readlines():
+                        li_b = line.strip().encode('utf-8')
+                        li_b += b"\r\n"
+                        content += li_b
+                        print("line content: {}".format(content))
+                print("This is the whole content: {}".format(content))
+
+            if mime_type == b'text/plain':
+                content = b""
+                print("file name is {}".format(file_name))
+                with open(file_name, 'r') as reader:
+                    for line in reader.readlines():
+                        li_b = line.strip().encode('utf-8')
+                        li_b += b"\r\n"
+                        content += li_b
+                        print("line content: {}".format(content))
+                print("This is the whole content: {}".format(content))
+
+            if mime_type == b"image/png":
+                print(f"the image/png file going to open is {file_name}")
+                with open(file_name, 'rb') as f:
+                    img = f.read()
+                content = img
+                print("image/png content is done")
+
+            if mime_type == b'image/jpeg':
+                print(f"the image/png file going to open is {file_name}")
+                with open(file_name, 'rb') as f:
+                    img = f.read()
+                content = img
+                print("image/jpeg content is done")
+
+        elif os.path.isdir(new_path):
+            os.chdir(new_path)
+            dirs = os.listdir(new_path)
+            content = b""
+            for i in dirs:
+                i += "\n"
+                item = i.encode('utf-8')
+                print(item)
+                content += item
+            mime_type = b"text/plain"
+            print(f"new dir so new cwd :{os.getcwd()}")
+    except Exception as e:
+        print("response_path error message: {}".format(e))
+        print("requested content is not present under webroot")
+        raise NameError
 
     return content, mime_type
 
@@ -104,43 +181,65 @@ def server(log_buffer=sys.stderr):
         while True:
             print('waiting for a connection', file=log_buffer)
             conn, addr = sock.accept()  # blocking
+            n = 0
             try:
                 print('connection - {0}:{1}'.format(*addr), file=log_buffer)
-
+                #request is decoded.
                 request = ''
-                while True:
+                while n<20:
+                    n +=1
+                    print("start receiving data buffer")
                     data = conn.recv(1024)
+                    print("request buffer received")
                     request += data.decode('utf8')
+                    print(f"buffer is added, request by now is {request}")
 
                     if '\r\n\r\n' in request:
+                        #conn.close()
                         break
-		
-
                 print("Request received:\n{}\n\n".format(request))
 
-                # TODO: Use parse_request to retrieve the path from the request.
+                try:
 
-                # TODO: Use response_path to retrieve the content and the mimetype,
-                # based on the request path.
+                    # TODO: Use parse_request to retrieve the path from the request.
+                    path = parse_request(request)
 
-                # TODO; If parse_request raised a NotImplementedError, then let
-                # response be a method_not_allowed response. If response_path raised
-                # a NameError, then let response be a not_found response. Else,
-                # use the content and mimetype from response_path to build a 
-                # response_ok.
-                response = response_ok(
-                    body=b"Welcome to my web server",
-                    mimetype=b"text/plain"
-                )
+                    # TODO: Use response_path to retrieve the content and the mimetype,
+                    # based on the request path.
+                    body, mimetype = response_path(path)
+
+                    # TODO; If parse_request raised a NotImplementedError, then let
+                    # response be a method_not_allowed response. If response_path raised
+                    # a NameError, then let response be a not_found response. Else,
+                    # use the content and mimetype from response_path to build a 
+                    # response_ok.
+                    response = response_ok(
+                        body,
+                        mimetype
+                    )
+                except NotImplementedError:
+                    response = response_method_not_allowed()
+                except NameError:
+                    response = response_not_found()
+                #except KeyboardInterrupt:
+                #    sock.close()
+                #    conn.close()
+                #    print("closed all")
+                #    break
+                #    return
 
                 conn.sendall(response)
+                #conn.close()
             except:
+                #conn.close()
                 traceback.print_exc()
             finally:
                 conn.close() 
 
     except KeyboardInterrupt:
+        conn.close()
         sock.close()
+        print("Keyboard interrupt: conn and sock closed")
         return
     except:
         traceback.print_exc()
